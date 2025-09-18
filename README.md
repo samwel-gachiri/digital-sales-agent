@@ -1,118 +1,187 @@
-# Digital Sales Agent - Coral Protocol Hackathon
+# Digital Sales Agent - AI-Powered Sales Automation
 
-An AI-powered sales automation system that leverages the Coral Protocol to orchestrate multiple specialized agents for end-to-end sales processes. This project showcases the power of agent reusability and coordination through Coral Protocol.
+An intelligent sales automation system that leverages the Coral Protocol to orchestrate multiple specialized agents for complete sales workflows. Features ElevenLabs voice integration, automated prospect research, and real-time agent coordination.
 
-![Digital Sales Agent](https://via.placeholder.com/800x400/3b82f6/ffffff?text=Digital+Sales+Agent)
+![Digital Sales Agent Architecture](https://via.placeholder.com/800x400/3b82f6/ffffff?text=Digital+Sales+Agent+Architecture)
 
 ## 🎯 Overview
 
-The Digital Sales Agent automates the complete sales workflow from prospect discovery to deal closure using a multi-agent architecture:
+The Digital Sales Agent automates the entire sales process from onboarding to deal closure using a sophisticated multi-agent architecture:
 
-- **Prospect Discovery** - AI-powered web scraping and company research
-- **Lead Qualification** - BANT scoring with voice interactions
-- **Contact Initiation** - Voice and email automation with ElevenLabs
-- **Deal Progression** - Pipeline management and CRM integration
-- **Sales Analytics** - Real-time performance insights and reporting
+- **Voice-Powered Onboarding** - ElevenLabs TTS for natural business information collection
+- **Automated Prospect Research** - AI agents coordinate to find and qualify leads
+- **Intelligent Email Generation** - Personalized cold emails with conversation links
+- **Real-Time Sales Conversations** - Voice-enabled prospect interactions
+- **Complete Workflow Automation** - End-to-end sales process with minimal human intervention
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
-### Agent Ecosystem
+### Multi-Agent Ecosystem
 
-- **Sales Agent** - Central orchestrator for sales workflows
-- **Sales Interface Agent** - FastAPI backend with REST endpoints
-- **Firecrawl Agent** - Web scraping and contact extraction
-- **OpenDeepResearch Agent** - Company intelligence and market research
-- **VoiceInterface Agent** - Real-time voice interactions with ElevenLabs
-- **Pandas Agent** - Data analysis and reporting
+```mermaid
+graph TB
+    UI[Next.js Frontend] --> Backend[FastAPI Backend]
+    Backend --> Sales[Sales Agent]
+    Sales --> Firecrawl[Firecrawl Agent]
+    Sales --> Interface[Interface Agent]
+    Backend --> Interface
 
-### Technology Stack
+    subgraph "Coral Protocol"
+        Sales
+        Firecrawl
+        Interface
+    end
+
+    subgraph "External Services"
+        ElevenLabs[ElevenLabs TTS]
+        SMTP[Email Service]
+    end
+
+    Interface --> ElevenLabs
+    Sales --> SMTP
+```
+
+**Core Agents:**
+
+- **Sales Agent** - Central orchestrator handling prospect research, email generation, and workflow coordination
+- **Interface Agent** - Voice-enabled agent for onboarding and sales conversations using ElevenLabs
+- **Firecrawl Agent** - Web scraping specialist for prospect research and contact extraction
+- **Backend Coordinator** - FastAPI service managing frontend requests and agent communication
+
+**Technology Stack:**
 
 - **Backend**: Python, FastAPI, LangChain, Coral Protocol
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS
-- **Voice**: LiveKit, ElevenLabs TTS
-- **Data**: Pydantic models, PostgreSQL (planned)
-- **Deployment**: Docker, Kubernetes (planned)
+- **Voice AI**: ElevenLabs TTS for natural speech synthesis
+- **Agent Communication**: Coral Protocol for multi-agent coordination
+- **Data Models**: Pydantic for type-safe data handling
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Setup
 
 ### Prerequisites
 
-- Python 3.13+
-- Node.js 18+
-- [Coral Server](https://github.com/Coral-Protocol/coral-server) running
-- API keys for OpenAI, ElevenLabs, Firecrawl, etc.
+- **Python 3.13+** with `uv` package manager
+- **Node.js 18+** with npm
+- **API Keys**: OpenAI, ElevenLabs (for voice), Firecrawl (optional)
+- **Email Setup**: SMTP credentials for email sending (Gmail recommended)
 
-### 1. Setup Coral Server
-
-Follow the [Coral Server setup guide](https://github.com/Coral-Protocol/coral-server) to get the core protocol running.
-
-### 2. Setup Agents
-
-#### Sales Agent
+### 1. Clone and Setup
 
 ```bash
-cd Coral-SalesAgent
-cp .env_sample .env
-# Edit .env with your API keys
-uv sync
-uv run python main.py
+git clone <repository-url>
+cd Coral-LeadsWebapp
 ```
 
-#### Sales Interface Agent
+### 2. Start Coral Server
 
 ```bash
-cd Coral-SalesInterfaceAgent
-cp .env_sample .env
-# Edit .env with your API keys
-uv sync
-uv run python main.py
+cd coral-server
+./gradlew run
+# Server will start on http://localhost:5555
 ```
 
-#### Existing Agents
+### 3. Configure Environment Variables
 
-Setup the required existing agents:
+#### Sales Agent Configuration
 
 ```bash
-# Firecrawl Agent
-cd Coral-FirecrawlMCP-Agent
+cd Coral-Sales-Agent
 cp .env_sample .env
-uv sync
-uv run python main.py
+```
 
-# OpenDeepResearch Agent
-cd Coral-OpenDeepResearch-Agent
-cp .env_sample .env
-uv sync
-uv run python main.py
+Edit `.env` with your credentials:
 
-# VoiceInterface Agent
-cd Coral-VoiceInterface-Agent
+```env
+# Model Configuration
+MODEL_NAME=gpt-4o-mini
+MODEL_PROVIDER=openai
+MODEL_API_KEY=your_openai_api_key_here
+
+# Coral Protocol
+CORAL_SSE_URL=http://localhost:5555/sse/v1/devmode/exampleApplication/privkey/session1/sse
+CORAL_AGENT_ID=sales_agent
+
+# Email Configuration (Optional - for real email sending)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+TEST_EMAIL=samgachiri2002@gmail.com
+```
+
+#### Backend Configuration
+
+```bash
+cd backend
 cp .env.example .env
-uv sync
-uv run python main.py console
-
-# Pandas Agent
-cd Coral-Pandas-Agent
-cp .env_sample .env
-uv sync
-uv run python main.py
 ```
 
-### 3. Setup Frontend
+Edit `backend/.env`:
+
+```env
+# Model Configuration
+MODEL_NAME=gpt-4o-mini
+MODEL_PROVIDER=openai
+MODEL_API_KEY=your_openai_api_key_here
+
+# ElevenLabs Configuration
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_VOICE_ID=your_voice_id
+
+# Coral Protocol
+CORAL_SSE_URL=http://localhost:5555
+CORAL_AGENT_ID=backend_coordinator
+```
+
+#### Frontend Configuration
 
 ```bash
 cd SalesUI
-npm install
 cp .env.local.example .env.local
-# Edit .env.local with your configuration
-npm run dev
 ```
 
-### 4. Access the Application
+Edit `SalesUI/.env.local`:
 
-- Frontend: http://localhost:3000
-- Sales API: http://localhost:8000
-- Coral Server: http://localhost:8080
+```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_VOICE_ID=your_voice_id
+```
+
+### 4. Start All Services
+
+Use the provided batch script (Windows) or start manually:
+
+```bash
+# Windows
+start_agents.bat
+
+# Manual startup (run each in separate terminals)
+cd coral-server && ./gradlew run
+cd Coral-Sales-Agent && uv run python main.py
+cd Coral-FirecrawlMCP-Agent && uv run python main.py
+cd Coral-Interface-Agent && uv run python main.py
+cd backend && python main.py
+cd SalesUI && npm run dev
+```
+
+### 5. Access the Application
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Coral Server**: http://localhost:5555
+- **API Health Check**: http://localhost:8000/api/health
+
+### Email Setup (Optional)
+
+For real email sending, configure Gmail App Password:
+
+1. Enable 2-Factor Authentication on your Gmail account
+2. Generate an App Password: Google Account → Security → App passwords
+3. Use the App Password in `SMTP_PASSWORD` (not your regular password)
+4. Set `SMTP_USERNAME` to your Gmail address
+
+**Note**: Without SMTP configuration, the system works in demo mode sending emails to `samgachiri2002@gmail.com` for testing.
 
 ## 📋 Features
 

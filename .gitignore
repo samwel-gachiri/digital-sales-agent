@@ -149,3 +149,12 @@ coral-server/
 # Demo and test data
 demo_data/
 test_results/
+
+Coral-AciDevMCP-Agent
+Coral-OpenDeepResearch-Agent
+Coral-Pandas-Agent
+coral-server
+coraliser
+Coral-VoiceInterface-Agent
+Multi-Agent-Demo
+Prosus-Agentic-Voice-Restaurant-Webapp
