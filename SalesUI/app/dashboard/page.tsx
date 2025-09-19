@@ -50,8 +50,7 @@ export default function DashboardPage() {
 
         // Start real-time updates
         fetchWorkflowStatus();
-        const interval = setInterval(fetchWorkflowStatus, 15000); // Update every 5 seconds
-
+        const interval = setInterval(fetchWorkflowStatus, 30000);
         return () => clearInterval(interval);
     }, [router]);
 
@@ -143,6 +142,9 @@ export default function DashboardPage() {
                                 } animate-pulse`}></div>
                             <span>{workflowStatus?.system_status === "active" ? "Active" : "Standby"}</span>
                         </div>
+                        <Link href="/web3" className="text-gray-600 hover:text-gray-900 transition-colors">
+                            Web3
+                        </Link>
                         <Link href="/onboarding" className="text-gray-600 hover:text-gray-900 transition-colors">
                             Settings
                         </Link>
@@ -335,6 +337,18 @@ export default function DashboardPage() {
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900">Sales Conversations</h3>
                                     <p className="text-gray-600">Monitor AI-powered sales conversations</p>
+                                </div>
+                            </div>
+                        </Link>
+
+                        <Link href="/web3" className="block bg-white/70 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 hover:shadow-2xl transition-all duration-200 group">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center group-hover:from-yellow-500 group-hover:to-orange-600 transition-all duration-200">
+                                    <Zap className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Web3 Integration</h3>
+                                    <p className="text-gray-600">Blockchain payments & NFT rewards</p>
                                 </div>
                             </div>
                         </Link>

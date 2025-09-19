@@ -39,7 +39,7 @@ export default function HomePage() {
                         using intelligent agents that work 24/7.
                     </p>
 
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 flex-wrap">
                         <Link
                             href="/onboarding"
                             className="btn-primary inline-flex items-center justify-center space-x-2 text-lg px-8 py-4"
@@ -57,10 +57,18 @@ export default function HomePage() {
                             <BarChart3 className="h-5 w-5" />
                             <span>View Dashboard</span>
                         </Link>
+
+                        <Link
+                            href="/web3"
+                            className="btn-secondary inline-flex items-center justify-center space-x-2 text-lg px-8 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:from-yellow-500 hover:to-orange-600"
+                        >
+                            <Bot className="h-5 w-5" />
+                            <span>Web3 Features</span>
+                        </Link>
                     </div>
 
                     {/* Features Grid */}
-                    <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
                         <div className="card text-center group hover:shadow-md transition-shadow duration-200">
                             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:bg-blue-200 transition-colors duration-200">
                                 <Bot className="h-6 w-6 text-blue-600" />
@@ -88,6 +96,16 @@ export default function HomePage() {
                             <h3 className="text-lg font-semibold text-gray-900 mb-2">Voice Conversations</h3>
                             <p className="text-gray-600">
                                 AI-powered voice conversations that can listen, respond, and close deals automatically.
+                            </p>
+                        </div>
+
+                        <div className="card text-center group hover:shadow-md transition-shadow duration-200">
+                            <div className="w-12 h-12 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:from-yellow-500 group-hover:to-orange-600 transition-all duration-200">
+                                <Bot className="h-6 w-6 text-white" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Web3 Integration</h3>
+                            <p className="text-gray-600">
+                                Blockchain payments, NFT achievement rewards, and smart contract automation via Crossmint.
                             </p>
                         </div>
                     </div>

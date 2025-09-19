@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import uvicorn
 from elevenlabs_service import elevenlabs_service
+from crossmint_service import crossmint_service
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -26,9 +27,9 @@ app = FastAPI(title="Digital Sales Agent Backend")
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -70,6 +71,23 @@ class SendEmailRequest(BaseModel):
 class StartConversationRequest(BaseModel):
     prospect_id: str
     user_message: Optional[str] = ""
+
+class SubscriptionRequest(BaseModel):
+    customer_email: str
+    customer_name: str
+    plan_type: str = "pro"
+    amount: float = 99.00
+
+class AchievementRequest(BaseModel):
+    recipient_email: str
+    achievement_type: str
+    performance_data: Dict[str, Any]
+
+class DealPaymentRequest(BaseModel):
+    deal_id: str
+    amount: float
+    customer_email: str
+    sales_agent_id: str = "sales_agent_001"
 
 def get_tools_description(tools):
     return "\n".join(
@@ -644,18 +662,170 @@ async def get_analytics():
     
     return result
 
+# Crossmint Web3 Integration Endpoints
+
+@app.post("/api/crossmint/subscription")
+async def create_subscription(request: SubscriptionRequest):
+    """Create subscription payment via Crossmint"""
+    logger.info(f"Creating Crossmint subscription for {request.customer_email}")
+    
+    try:
+        result = await crossmint_service.create_subscription_payment(
+            customer_email=request.customer_email,
+            customer_name=request.customer_name,
+            plan_type=request.plan_type,
+            amount=request.amount
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error creating subscription: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/api/crossmint/achievement")
+async def mint_achievement_nft(request: AchievementRequest):
+    """Mint achievement NFT for sales performance"""
+    logger.info(f"Minting achievement NFT: {request.achievement_type} for {request.recipient_email}")
+    
+    try:
+        result = await crossmint_service.mint_achievement_nft(
+            recipient_email=request.recipient_email,
+            achievement_type=request.achievement_type,
+            performance_data=request.performance_data
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error minting achievement NFT: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/api/crossmint/deal-payment")
+async def process_deal_payment(request: DealPaymentRequest):
+    """Process deal payment with automatic commission distribution"""
+    logger.info(f"Processing deal payment: {request.deal_id} - ${request.amount}")
+    
+    try:
+        result = await crossmint_service.process_deal_payment(
+            deal_id=request.deal_id,
+            amount=request.amount,
+            customer_email=request.customer_email,
+            sales_agent_id=request.sales_agent_id
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing deal payment: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.get("/api/crossmint/wallet/{email}")
+async def get_wallet_status(email: str):
+    """Get wallet status and NFT collection for user"""
+    logger.info(f"Getting wallet status for {email}")
+    
+    try:
+        result = await crossmint_service.get_wallet_status(email)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting wallet status: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/api/crossmint/commission")
+async def create_commission_token(deal_id: str, amount: float, sales_agent_id: str = "sales_agent_001"):
+    """Create commission token for sales agent"""
+    logger.info(f"Creating commission token: ${amount} for agent {sales_agent_id}")
+    
+    try:
+        result = await crossmint_service.create_commission_token(
+            sales_agent_id=sales_agent_id,
+            commission_amount=amount,
+            deal_id=deal_id
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error creating commission token: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/api/crossmint/process-rewards")
+async def process_web3_rewards(request: dict):
+    """Process Web3 rewards for deal closure - called by Sales Agent"""
+    logger.info(f"Processing Web3 rewards for deal: {request.get('deal_id')}")
+    
+    try:
+        deal_id = request.get("deal_id")
+        deal_value = request.get("deal_value", 5000)
+        sales_agent_id = request.get("sales_agent_id", "sales_agent_001")
+        achievement_type = request.get("achievement_type", "deal_closer")
+        performance_data = request.get("performance_data", {})
+        
+        # Process deal payment with automatic commission and NFT rewards
+        payment_result = await crossmint_service.process_deal_payment(
+            deal_id=deal_id,
+            amount=deal_value,
+            customer_email="customer@example.com",
+            sales_agent_id=sales_agent_id
+        )
+        
+        # Additional achievement NFT for the specific achievement type
+        if achievement_type and performance_data:
+            achievement_result = await crossmint_service.mint_achievement_nft(
+                recipient_email="samgachiri2002@gmail.com",
+                achievement_type=achievement_type,
+                performance_data=performance_data
+            )
+        else:
+            achievement_result = {"status": "skipped", "message": "No achievement data provided"}
+        
+        return {
+            "status": "success",
+            "deal_id": deal_id,
+            "payment_processing": payment_result,
+            "achievement_nft": achievement_result,
+            "web3_integration": "completed"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing Web3 rewards: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
     agent_status = "connected" if agent_executor else "disconnected"
     elevenlabs_status = "configured" if elevenlabs_service.api_key else "not_configured"
+    crossmint_status = "configured" if crossmint_service.enabled else "not_configured"
     
     return {
         "status": "healthy",
         "service": "Digital Sales Agent Backend",
         "agent_status": agent_status,
         "elevenlabs_status": elevenlabs_status,
-        "elevenlabs_voice_id": elevenlabs_service.voice_id
+        "elevenlabs_voice_id": elevenlabs_service.voice_id,
+        "crossmint_status": crossmint_status,
+        "crossmint_environment": crossmint_service.environment if crossmint_service.enabled else None
     }
 
 @app.post("/api/test/elevenlabs")
