@@ -119,16 +119,41 @@ async def communicate_with_sales_agent(instruction: str, data: dict = None, time
         # Parse the response
         output = response.get("output", "No response from sales_agent")
         
-        # Try to extract actual sales agent response from the output
-        if "sales_agent" in output.lower() and any(keyword in output.lower() for keyword in ["success", "completed", "generated", "sent"]):
-            return {
-                "status": "success",
-                "response": output,
-                "instruction": instruction,
-                "agent_communication": True
-            }
-        else:
-            logger.warning(f"Unexpected response format from sales_agent: {output}")
+        # Try to extract JSON from the sales agent response
+        try:
+            # Look for JSON in markdown code blocks
+            if "```json" in output and "```" in output:
+                json_start = output.find("```json") + 7
+                json_end = output.find("```", json_start)
+                json_content = output[json_start:json_end].strip()
+                parsed_response = json.loads(json_content)
+                logger.info(f"Successfully parsed JSON response: {parsed_response}")
+                return parsed_response
+            
+            # Look for JSON without markdown formatting
+            elif "{" in output and "}" in output:
+                json_start = output.find("{")
+                json_end = output.rfind("}") + 1
+                json_content = output[json_start:json_end]
+                parsed_response = json.loads(json_content)
+                logger.info(f"Successfully parsed JSON response: {parsed_response}")
+                return parsed_response
+            
+            # Check for basic success indicators if no JSON found
+            elif "sales_agent" in output.lower() and any(keyword in output.lower() for keyword in ["success", "completed", "generated", "sent"]):
+                return {
+                    "status": "success",
+                    "response": output,
+                    "instruction": instruction,
+                    "agent_communication": True
+                }
+            else:
+                logger.warning(f"Unexpected response format from sales_agent: {output}")
+                return await get_fallback_response(instruction, data)
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from sales_agent response: {e}")
+            logger.warning(f"Raw response: {output}")
             return await get_fallback_response(instruction, data)
         
     except asyncio.TimeoutError:

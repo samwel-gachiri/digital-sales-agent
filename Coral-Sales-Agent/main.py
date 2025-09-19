@@ -381,6 +381,69 @@ async def process_conversation_response(conversation_id: str, agent_response: st
         "conversation_status": conversation["status"]
     }
 
+async def handle_interface_conversation(data: dict):
+    """Handle conversation instructions from Interface Agent"""
+    logger.info(f"Sales Agent: Handling interface conversation")
+    
+    user_message = data.get("user_message", "")
+    conversation_history = data.get("conversation_history", [])
+    conversation_type = data.get("conversation_type", "")
+    questions_needed = data.get("questions_needed", [])
+    
+    if conversation_type == "onboarding":
+        # Handle onboarding conversation
+        # Extract business information from conversation history
+        business_goal = ""
+        product_description = ""
+        target_market = ""
+        value_proposition = ""
+        
+        # Parse conversation history to extract business info
+        for message in conversation_history:
+            if message.get("sender") == "user":
+                content = message.get("content", "").lower()
+                if "selling" in content or "business" in content:
+                    if not business_goal:
+                        business_goal = f"My business goal is to {user_message}"
+                    if not product_description:
+                        product_description = user_message
+                if "target" in content or "market" in content:
+                    target_market = user_message
+                if "value" in content or "unique" in content:
+                    value_proposition = user_message
+        
+        # Store business information
+        if user_message and any(keyword in user_message.lower() for keyword in ["selling", "business", "goal", "value", "unique"]):
+            info_id = str(uuid.uuid4())
+            business_info[info_id] = {
+                "id": info_id,
+                "business_goal": business_goal or user_message,
+                "product_description": product_description or user_message,
+                "target_market": target_market or user_message,
+                "value_proposition": value_proposition or user_message,
+                "created_at": datetime.now().isoformat(),
+                "onboarding_completed": len(conversation_history) >= 4  # Assuming 4+ messages means complete
+            }
+            
+            logger.info(f"Sales Agent: Stored business info from onboarding: {business_goal}")
+        
+        return {
+            "status": "success",
+            "message": "Interface conversation processed for onboarding",
+            "conversation_type": conversation_type,
+            "business_info_collected": len(business_info) > 0,
+            "onboarding_progress": f"{len(conversation_history)}/{len(questions_needed)} questions answered"
+        }
+    
+    else:
+        # Handle sales conversation
+        return {
+            "status": "success", 
+            "message": "Interface conversation processed for sales",
+            "conversation_type": conversation_type,
+            "user_message": user_message
+        }
+
 async def auto_research_prospects(business_info: dict, target_criteria: dict):
     """Automatically research prospects based on business info - coordinates with Firecrawl agent"""
     logger.info(f"Sales Agent: Auto-researching prospects for {business_info.get('business_goal', 'business')}")
@@ -530,11 +593,31 @@ async def parse_and_execute_instruction(message_data: str):
                 target_market=data.get("target_market", ""),
                 value_proposition=data.get("value_proposition", "")
             )
+        elif instruction_type == "interface_agent_conversation":
+            # Handle conversation instructions from Interface Agent
+            result = await handle_interface_conversation(data)
+        elif instruction_type == "auto_research_prospects":
+            # Handle automatic prospect research
+            business_info_data = data.get("business_info", {})
+            target_criteria = data.get("target_criteria", {})
+            result = await auto_research_prospects(business_info_data, target_criteria)
+        elif instruction_type == "auto_generate_emails":
+            # Handle automatic email generation
+            business_info_data = data.get("business_info", {})
+            prospects_list = data.get("prospects", [])
+            result = await auto_generate_emails(business_info_data, prospects_list)
+        elif instruction_type == "get_workflow_status":
+            # Handle workflow status requests
+            result = await get_workflow_status()
         else:
             result = {
                 "status": "error",
                 "message": f"Unknown instruction type: {instruction_type}",
-                "available_instructions": ["research_prospects", "generate_cold_email", "send_email", "get_analytics", "collect_business_info"]
+                "available_instructions": [
+                    "research_prospects", "generate_cold_email", "send_email", "get_analytics", 
+                    "collect_business_info", "interface_agent_conversation", "auto_research_prospects", 
+                    "auto_generate_emails", "get_workflow_status"
+                ]
             }
         
         logger.info(f"Sales Agent: Instruction '{instruction_type}' executed successfully")
@@ -647,13 +730,15 @@ async def create_agent(coral_tools, agent_tools):
             1. Use coral_wait_for_mentions to listen for instructions from other agents
             2. Parse received messages for JSON instructions or simple text
             3. Execute appropriate sales tools based on instructions
-            4. Use coral_send_message to respond back with results
+            4. Use coral_send_message to respond back with EXACT JSON results
             5. Loop back to wait for more instructions
             
             INSTRUCTION PROCESSING:
-            - For JSON messages: Use parse_and_execute_instruction tool with the JSON content and sender ID
+            - For JSON messages: Use parse_and_execute_instruction tool with the JSON content
             - For simple text: Use acknowledge_message tool with sender ID and message content
-            - Always respond using coral_send_message with proper threadId and mentions
+            - CRITICAL: Always send the EXACT JSON result from tools via coral_send_message
+            - Do NOT interpret, summarize, or modify the JSON responses from tools
+            - The content parameter in coral_send_message must be the raw JSON string from the tool
             
             AVAILABLE TOOLS:
             Coral Protocol: {coral_tools_description}
@@ -714,13 +799,9 @@ async def main():
 
     logger.info("Coral Server Connection Established")
 
-    methods = [m for m in dir(client) if callable(getattr(client, m))]
-    logger.info(methods)
     coral_tools = await client.get_tools(server_name="coral")
     logger.info(f"Coral tools count: {len(coral_tools)}")
-    logger.info("coral tools")
-    logger.info(coral_tools)
-    logger.info("callable methods")
+    
     # Sales Agent tools
     agent_tools = [
         Tool(
@@ -884,31 +965,29 @@ async def main():
             }
         ),
         Tool(
-            name="acknowledge_message",
+            name="handle_interface_conversation",
             func=None,
-            coroutine=acknowledge_message,
-            description="Acknowledge receipt of a message from another agent",
+            coroutine=handle_interface_conversation,
+            description="Handle conversation instructions from Interface Agent",
             args_schema={
                 "properties": {
-                    "sender_id": {"type": "string", "description": "ID of the agent that sent the message"},
-                    "message_content": {"type": "string", "description": "Content of the received message"}
+                    "data": {"type": "object", "description": "Conversation data from Interface Agent"}
                 },
-                "required": ["sender_id", "message_content"],
+                "required": ["data"],
                 "type": "object"
             }
         ),
-        Tool(
-            name="parse_and_execute_instruction",
-            func=None,
-            coroutine=parse_and_execute_instruction,
+        StructuredTool.from_function(
+            func=acknowledge_message,
+            name="acknowledge_message",
+            description="Acknowledge receipt of a message from another agent",
+            coroutine=acknowledge_message
+        ),
+        StructuredTool.from_function(
+            func=parse_and_execute_instruction,
+            name="parse_and_execute_instruction", 
             description="Parse JSON instruction and execute the corresponding sales tool",
-            args_schema={
-                "properties": {
-                    "message_data": {"type": "string", "description": "Message data containing JSON instruction"}
-                },
-                "required": ["message_data"],
-                "type": "object"
-            }
+            coroutine=parse_and_execute_instruction
         )
     ]
 
@@ -947,7 +1026,7 @@ async def main():
                     # Process the instruction with explicit handling
                     processing_response = await agent_executor.ainvoke({
                         "input": f"""
-                        Process the received message and respond:
+                        Process the received message and respond with EXACT JSON:
                         
                         MESSAGE DATA: {output}
                         
@@ -956,9 +1035,10 @@ async def main():
                         2. Check if message content contains JSON with "instruction" field:
                            - If YES: Use parse_and_execute_instruction tool with the message data
                            - If NO: Use acknowledge_message tool with sender ID and message content
-                        3. Use coral_send_message to send the results back with proper threadId and mentions
+                        3. Use coral_send_message to send the EXACT JSON result from step 2 with proper threadId and mentions
                         
-                        IMPORTANT: Always respond back to the sender using coral_send_message!
+                        CRITICAL: Send the raw JSON result from the tool, do NOT summarize or interpret it!
+                        The content parameter in coral_send_message must be the exact JSON string returned by the tool.
                         """
                     })
                     
