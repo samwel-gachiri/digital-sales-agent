@@ -350,37 +350,39 @@ export default function OnboardingPage() {
             const completionMessage: Message = {
                 id: (Date.now() + 2).toString(),
                 sender: "Interface Agent",
-                content: "Perfect! I'm now setting up your automated sales system. Your AI agents will start researching prospects and sending personalized emails immediately. You'll be redirected to your dashboard to monitor the progress.",
+                content: "Perfect! I'm setting up your automated sales system now. Your AI agents will start working immediately. Let's go to your dashboard to monitor the progress!",
                 timestamp: new Date()
             };
 
             setMessages(prev => [...prev, completionMessage]);
 
-            // Complete onboarding and trigger automated workflow
-            const response = await fetch("http://localhost:8000/api/onboarding/complete", {
+            // Save business info locally first
+            localStorage.setItem("businessInfo", JSON.stringify(businessInfo));
+            localStorage.setItem("workflowInitiated", "true");
+            localStorage.setItem("onboardingCompletedAt", new Date().toISOString());
+
+            // Trigger automated workflow in background (don't wait for completion)
+            fetch("http://localhost:8000/api/onboarding/complete", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify(businessInfo),
-            });
+            }).then(response => response.json())
+                .then(result => {
+                    console.log("Background workflow initiated:", result);
+                })
+                .catch(error => {
+                    console.error("Background workflow error:", error);
+                });
 
-            const result = await response.json();
+            // Immediately redirect to dashboard (don't wait for backend)
+            setTimeout(() => {
+                router.push("/dashboard");
+            }, 1500); // Shorter delay for better UX
 
-            if (result.status === "success") {
-                localStorage.setItem("businessInfo", JSON.stringify(businessInfo));
-                localStorage.setItem("workflowInitiated", "true");
-                localStorage.setItem("onboardingCompletedAt", new Date().toISOString());
-
-                // Show success message
-                setTimeout(() => {
-                    router.push("/dashboard");
-                }, 2000);
-            } else {
-                console.error("Failed to complete onboarding:", result.message);
-            }
         } catch (error) {
-            console.error("Error completing onboarding:", error);
+            console.error("Error saving business info:", error);
         } finally {
             setIsLoading(false);
         }

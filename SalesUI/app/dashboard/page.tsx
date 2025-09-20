@@ -51,7 +51,20 @@ export default function DashboardPage() {
         // Start real-time updates
         fetchWorkflowStatus();
         const interval = setInterval(fetchWorkflowStatus, 30000);
-        return () => clearInterval(interval);
+
+        // Stop interval when page becomes hidden
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                clearInterval(interval);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [router]);
 
     const fetchWorkflowStatus = async () => {
