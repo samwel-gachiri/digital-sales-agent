@@ -7,20 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+
 
 # Virtual environments
 .env
@@ -145,6 +132,7 @@ Thumbs.db
 # Coral Protocol specific
 coral-server/
 .coral/
+.kiro/
 
 # Demo and test data
 demo_data/
@@ -155,6 +143,7 @@ Coral-OpenDeepResearch-Agent
 Coral-Pandas-Agent
 coral-server
 coraliser
-Coral-VoiceInterface-Agent
-Multi-Agent-Demo
-Prosus-Agentic-Voice-Restaurant-Webapp
+Coral-VoiceInterface-Agent/
+Multi-Agent-Demo/
+Prosus-Agentic-Voice-Restaurant-Webapp/
+Coral-OpenDeepResearch-Agent/
