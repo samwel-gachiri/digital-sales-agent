@@ -51,7 +51,20 @@ export default function DashboardPage() {
         // Start real-time updates
         fetchWorkflowStatus();
         const interval = setInterval(fetchWorkflowStatus, 30000);
-        return () => clearInterval(interval);
+
+        // Stop interval when page becomes hidden
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                clearInterval(interval);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [router]);
 
     const fetchWorkflowStatus = async () => {
@@ -214,11 +227,11 @@ export default function DashboardPage() {
                                 <p className="text-3xl font-bold text-gray-900">
                                     {workflowStatus?.total_prospects || 0}
                                 </p>
-                                {workflowStatus?.auto_generated_prospects > 0 && (
+                                {/* {workflowStatus?.auto_generated_prospects > 0 && (
                                     <p className="text-xs text-blue-600">
                                         {workflowStatus.auto_generated_prospects} auto-generated
                                     </p>
-                                )}
+                                )} */}
                             </div>
                             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                                 <Users className="h-6 w-6 text-blue-600" />
