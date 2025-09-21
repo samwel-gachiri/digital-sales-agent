@@ -137,8 +137,8 @@ Thumbs.db
 demo_data/
 test_results/
 
-SalesUI/app/conversations/
-SalesUI/app/emails/
+# SalesUI/app/conversations/
+# SalesUI/app/emails/
 
 
 Coral-AciDevMCP-Agent/
