@@ -21,27 +21,29 @@ The Digital Sales Agent automates the entire sales process from onboarding to de
 
 ```mermaid
 graph TB
-    UI[Next.js Frontend] --> Backend[FastAPI Backend]
-    Backend --> Sales[Sales Agent]
-    Sales --> Firecrawl[Firecrawl Agent]
-    Sales --> Interface[Interface Agent]
+    UI[🖥️ Next.js Frontend] --> Backend[⚡ FastAPI Backend]
+
+    Backend --> Sales[🤖 Sales Agent]
+    Sales --> Firecrawl[🌐 Firecrawl Agent]
+    Sales --> Interface[🔌 Interface Agent]
     Backend --> Interface
 
-    subgraph "Coral Protocol"
+    subgraph Coral["🌊 Coral Protocol"]
         Sales
         Firecrawl
         Interface
     end
 
-    subgraph "External Services"
-        ElevenLabs[ElevenLabs TTS]
-        SMTP[Email Service]
+    subgraph External["☁️ External Services"]
+        ElevenLabs[🎙️ ElevenLabs TTS]
+        SMTP[📧 Email Service]
+        Crossmint[💳 Crossmint Payments]
     end
 
     Interface --> ElevenLabs
     Sales --> SMTP
+    Sales --> Crossmint
 ```
-
 **Core Agents:**
 
 - **Sales Agent** - Central orchestrator handling prospect research, email generation, and workflow coordination
@@ -69,7 +71,7 @@ graph TB
 ### 1. Clone and Setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/samwel-gachiri/digital-sales-agent.git
 cd digital-sales-agent
 ```
 
