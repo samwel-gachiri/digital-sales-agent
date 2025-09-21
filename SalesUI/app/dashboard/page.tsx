@@ -26,6 +26,21 @@ interface BusinessInfo {
     value_proposition: string;
 }
 
+// Demo data for when backend is not available
+const demoWorkflowStatus: WorkflowStatus = {
+    current_stage: "active_conversations",
+    next_action: "Following up with qualified leads",
+    total_prospects: 42,
+    auto_generated_prospects: 35,
+    emails_generated: 28,
+    emails_sent: 25,
+    active_conversations: 8,
+    conversion_rate: "32%",
+    last_activity: new Date().toISOString(),
+    workflow_active: true,
+    system_status: "active"
+};
+
 export default function DashboardPage() {
     const router = useRouter();
     const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
@@ -33,6 +48,12 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [workflowInitiated, setWorkflowInitiated] = useState(false);
     const [realTimeUpdates, setRealTimeUpdates] = useState<string[]>([]);
+    const [usingDemoData, setUsingDemoData] = useState(false);
+    const [animationValues, setAnimationValues] = useState({
+        prospects: 0,
+        emails: 0,
+        conversations: 0
+    });
 
     useEffect(() => {
         // Check if user has completed onboarding
@@ -52,6 +73,11 @@ export default function DashboardPage() {
         fetchWorkflowStatus();
         const interval = setInterval(fetchWorkflowStatus, 30000);
 
+        // Start demo animations if using demo data
+        if (usingDemoData) {
+            startDemoAnimations();
+        }
+
         // Stop interval when page becomes hidden
         const handleVisibilityChange = () => {
             if (document.hidden) {
@@ -65,11 +91,16 @@ export default function DashboardPage() {
             clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [router]);
+    }, [router, usingDemoData]);
 
     const fetchWorkflowStatus = async () => {
         try {
-            const response = await fetch("http://localhost:8000/api/workflow/status");
+            const response = await fetch("http://localhost:8000/api/workflow/status", {
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+            });
+            
+            if (!response.ok) throw new Error("Server error");
+            
             const result = await response.json();
 
             if (result.status === "success") {
@@ -89,12 +120,56 @@ export default function DashboardPage() {
                 }
 
                 setWorkflowStatus(newStatus);
+                setUsingDemoData(false);
             }
         } catch (error) {
             console.error("Error fetching workflow status:", error);
+            setWorkflowStatus(demoWorkflowStatus);
+            setUsingDemoData(true);
+            
+            // Add demo real-time updates
+            if (realTimeUpdates.length === 0) {
+                const demoUpdates = [
+                    "🤖 AI agent started prospect research",
+                    "🎯 Found 5 new potential clients",
+                    "📧 Generated personalized email for TechCorp Inc",
+                    "💬 Received response from John@StartupXYZ.com",
+                    "🚀 Scheduled follow-up meeting with Acme Co"
+                ];
+                setRealTimeUpdates(demoUpdates);
+            }
         } finally {
             setLoading(false);
         }
+    };
+
+    const startDemoAnimations = () => {
+        // Animate the counter values for demo effect
+        let prospects = 0;
+        let emails = 0;
+        let conversations = 0;
+        
+        const prospectsTarget = demoWorkflowStatus.total_prospects;
+        const emailsTarget = demoWorkflowStatus.emails_sent;
+        const conversationsTarget = demoWorkflowStatus.active_conversations;
+        
+        const interval = setInterval(() => {
+            if (prospects < prospectsTarget) prospects += Math.ceil(prospectsTarget / 20);
+            if (emails < emailsTarget) emails += Math.ceil(emailsTarget / 20);
+            if (conversations < conversationsTarget) conversations += Math.ceil(conversationsTarget / 20);
+            
+            setAnimationValues({
+                prospects: Math.min(prospects, prospectsTarget),
+                emails: Math.min(emails, emailsTarget),
+                conversations: Math.min(conversations, conversationsTarget)
+            });
+            
+            if (prospects >= prospectsTarget && 
+                emails >= emailsTarget && 
+                conversations >= conversationsTarget) {
+                clearInterval(interval);
+            }
+        }, 100);
     };
 
     const addRealTimeUpdate = (message: string) => {
@@ -155,6 +230,12 @@ export default function DashboardPage() {
                                 } animate-pulse`}></div>
                             <span>{workflowStatus?.system_status === "active" ? "Active" : "Standby"}</span>
                         </div>
+                        {usingDemoData && (
+                            <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium text-blue-700 bg-blue-100">
+                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                <span>Demo Mode</span>
+                            </div>
+                        )}
                         <Link href="/web3" className="text-gray-600 hover:text-gray-900 transition-colors">
                             Web3
                         </Link>
@@ -164,6 +245,26 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </nav>
+
+            {/* Demo Mode Banner */}
+            {usingDemoData && (
+                <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <Bot className="h-4 w-4 text-blue-600" />
+                            <p className="text-sm text-blue-700">
+                                <span className="font-medium">Demo Mode:</span> Showing sample data with animations
+                            </p>
+                        </div>
+                        <button 
+                            onClick={fetchWorkflowStatus}
+                            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                            Retry Connection
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-6 py-8">
@@ -175,6 +276,7 @@ export default function DashboardPage() {
                     {businessInfo ? (
                         <p className="text-lg text-gray-600">
                             AI agents working on: <span className="font-medium text-gray-900">{businessInfo.product_description}</span>
+                            {usingDemoData && " (Demo Data)"}
                         </p>
                     ) : (
                         <p className="text-gray-600">
@@ -225,13 +327,8 @@ export default function DashboardPage() {
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Total Prospects</p>
                                 <p className="text-3xl font-bold text-gray-900">
-                                    {workflowStatus?.total_prospects || 0}
+                                    {usingDemoData ? animationValues.prospects : workflowStatus?.total_prospects || 0}
                                 </p>
-                                {/* {workflowStatus?.auto_generated_prospects > 0 && (
-                                    <p className="text-xs text-blue-600">
-                                        {workflowStatus.auto_generated_prospects} auto-generated
-                                    </p>
-                                )} */}
                             </div>
                             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                                 <Users className="h-6 w-6 text-blue-600" />
@@ -244,7 +341,7 @@ export default function DashboardPage() {
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Emails Sent</p>
                                 <p className="text-3xl font-bold text-gray-900">
-                                    {workflowStatus?.emails_sent || 0}
+                                    {usingDemoData ? animationValues.emails : workflowStatus?.emails_sent || 0}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                     {workflowStatus?.emails_generated || 0} generated
@@ -261,7 +358,7 @@ export default function DashboardPage() {
                             <div>
                                 <p className="text-sm font-medium text-gray-600">Active Conversations</p>
                                 <p className="text-3xl font-bold text-gray-900">
-                                    {workflowStatus?.active_conversations || 0}
+                                    {usingDemoData ? animationValues.conversations : workflowStatus?.active_conversations || 0}
                                 </p>
                                 <p className="text-xs text-gray-500">AI-powered</p>
                             </div>
@@ -295,17 +392,33 @@ export default function DashboardPage() {
                         <div className="flex items-center space-x-2 mb-4">
                             <Activity className="h-5 w-5 text-blue-600" />
                             <h3 className="text-lg font-semibold text-gray-900">Live Activity Feed</h3>
+                            {usingDemoData && (
+                                <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                                    Simulated
+                                </span>
+                            )}
                         </div>
 
                         {realTimeUpdates.length > 0 ? (
                             <div className="space-y-3">
                                 {realTimeUpdates.map((update, index) => (
-                                    <div key={index} className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                                    <div 
+                                        key={index} 
+                                        className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg transition-all duration-300 hover:bg-blue-100"
+                                    >
                                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                                         <span className="text-sm text-gray-700">{update}</span>
                                         <span className="text-xs text-gray-500 ml-auto">Just now</span>
                                     </div>
                                 ))}
+                                {usingDemoData && (
+                                    <div className="text-center pt-4">
+                                        <div className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">
+                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                            Simulating live updates...
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="text-center py-8 text-gray-500">
