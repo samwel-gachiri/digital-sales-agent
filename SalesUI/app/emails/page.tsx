@@ -214,7 +214,7 @@ export default function EmailsPage() {
             <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-blue-700 flex items-center">
                 <Sparkles className="h-4 w-4 mr-2" />
-                <span>Currently in demo mode. Backend connection is unavailable.</span>
+                <span>Currently in demo mode</span>
               </p>
             </div>
           )}
