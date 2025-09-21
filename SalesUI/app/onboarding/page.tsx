@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
     ArrowLeft, Mic, MicOff, Bot, User, Volume2, VolumeX,
-    Play, MessageSquare, Send, Loader2, Sparkles, Activity
+    Play, MessageSquare, Send, Loader2, Sparkles, Activity,
+    AlertCircle, WifiOff, Server
 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,12 +40,19 @@ export default function OnboardingPage() {
         askedAboutValue: false,
         readyToComplete: false
     });
+    const [backendConnected, setBackendConnected] = useState(true);
+    const [elevenLabsActive, setElevenLabsActive] = useState(true);
+    const [showDemoMode, setShowDemoMode] = useState(false);
 
     const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
+    const connectionCheckRef = useRef<NodeJS.Timeout>();
 
     useEffect(() => {
+        // Check backend connection on component mount
+        checkBackendConnection();
+        
         // Initialize speech recognition
         if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
             const recognition = new (window as any).webkitSpeechRecognition();
@@ -69,7 +77,40 @@ export default function OnboardingPage() {
 
         // Auto-scroll to bottom of messages
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+        // Set up periodic connection checking
+        connectionCheckRef.current = setInterval(checkBackendConnection, 30000);
+
+        return () => {
+            if (connectionCheckRef.current) {
+                clearInterval(connectionCheckRef.current);
+            }
+        };
     }, [messages]);
+
+    const checkBackendConnection = async () => {
+        try {
+            const response = await fetch("http://localhost:8000/api/health", {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setBackendConnected(true);
+                setElevenLabsActive(data.elevenlabs_active || false);
+            } else {
+                setBackendConnected(false);
+                setElevenLabsActive(false);
+            }
+        } catch (error) {
+            console.error("Backend connection error:", error);
+            setBackendConnected(false);
+            setElevenLabsActive(false);
+        }
+    };
 
     // Auto-start conversation when component mounts
     useEffect(() => {
@@ -87,6 +128,22 @@ export default function OnboardingPage() {
         setConversationStarted(true);
         setIsLoading(true);
 
+        // If backend is not connected, use demo mode
+        if (!backendConnected) {
+            setShowDemoMode(true);
+            const demoMessage: Message = {
+                id: Date.now().toString(),
+                sender: "Interface Agent",
+                content: "Hello! I'm your AI sales assistant in demo mode. I'm here to learn about your business so I can help you with personalized sales automation. Let's start with a simple question: What is your business goal and what are you selling?",
+                timestamp: new Date(),
+            };
+
+            setMessages([demoMessage]);
+            await speakMessage(demoMessage.content);
+            setIsLoading(false);
+            return;
+        }
+
         try {
             // Get initial AI-generated question from Interface Agent
             const response = await fetch("http://localhost:8000/api/onboarding/conversation", {
@@ -99,6 +156,10 @@ export default function OnboardingPage() {
                     history: []
                 }),
             });
+
+            if (!response.ok) {
+                throw new Error("Backend not responding");
+            }
 
             const result = await response.json();
 
@@ -120,11 +181,15 @@ export default function OnboardingPage() {
             }
         } catch (error) {
             console.error("Error starting conversation:", error);
+            setBackendConnected(false);
+            setElevenLabsActive(false);
+            setShowDemoMode(true);
+            
             // Fallback message
             const fallbackMessage: Message = {
                 id: Date.now().toString(),
                 sender: "Interface Agent",
-                content: "Hello! I'm your AI sales assistant. What is your business goal and what are you selling?",
+                content: "Hello! I'm your AI sales assistant in demo mode. What is your business goal and what are you selling?",
                 timestamp: new Date()
             };
             setMessages([fallbackMessage]);
@@ -138,8 +203,8 @@ export default function OnboardingPage() {
         setIsAgentSpeaking(true);
 
         try {
-            // Use ElevenLabs audio if available
-            if (audioUrl && audioUrl.startsWith('data:audio/')) {
+            // Use ElevenLabs audio if available and active
+            if (audioUrl && audioUrl.startsWith('data:audio/') && elevenLabsActive) {
                 const audio = new Audio(audioUrl);
 
                 audio.onended = () => {
@@ -148,6 +213,7 @@ export default function OnboardingPage() {
 
                 audio.onerror = () => {
                     console.error("Error playing ElevenLabs audio, falling back to browser TTS");
+                    setElevenLabsActive(false);
                     fallbackToSpeechSynthesis(text);
                 };
 
@@ -155,10 +221,12 @@ export default function OnboardingPage() {
                 console.log("Playing ElevenLabs TTS audio");
             } else {
                 // Fallback to browser speech synthesis
+                setElevenLabsActive(false);
                 fallbackToSpeechSynthesis(text);
             }
         } catch (error) {
             console.error("Error playing audio:", error);
+            setElevenLabsActive(false);
             fallbackToSpeechSynthesis(text);
         }
     };
@@ -247,6 +315,13 @@ export default function OnboardingPage() {
 
         setConversationState(newState);
 
+        // If backend is not connected, use demo responses
+        if (!backendConnected || showDemoMode) {
+            await handleDemoResponse(message, newState);
+            setIsLoading(false);
+            return;
+        }
+
         try {
             // Get AI response from Interface Agent
             const response = await fetch("http://localhost:8000/api/onboarding/conversation", {
@@ -260,6 +335,10 @@ export default function OnboardingPage() {
                     conversation_state: newState
                 }),
             });
+
+            if (!response.ok) {
+                throw new Error("Backend not responding");
+            }
 
             const result = await response.json();
 
@@ -291,20 +370,51 @@ export default function OnboardingPage() {
             }
         } catch (error) {
             console.error("Error getting AI response:", error);
-            // Fallback response
-            const fallbackResponse = "Thank you for that information. Can you tell me more about your business?";
-            const agentMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                sender: "Interface Agent",
-                content: fallbackResponse,
-                timestamp: new Date()
-            };
-
-            setMessages(prev => [...prev, agentMessage]);
-            await speakMessage(fallbackResponse);
+            setBackendConnected(false);
+            setElevenLabsActive(false);
+            
+            // Fallback to demo mode
+            await handleDemoResponse(message, newState);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleDemoResponse = async (message: string, currentState: any) => {
+        // Simple demo conversation flow
+        let response = "";
+        
+        if (!currentState.askedAboutBusiness) {
+            response = "Thank you for sharing that! Could you tell me more about your target market? Who are your ideal customers?";
+            setConversationState(prev => ({ ...prev, askedAboutBusiness: true }));
+        } else if (!currentState.askedAboutTarget) {
+            response = "Great! Now, what makes your business unique? What's your value proposition or competitive advantage?";
+            setConversationState(prev => ({ ...prev, askedAboutTarget: true }));
+        } else if (!currentState.askedAboutValue) {
+            response = "Perfect! I now have enough information to set up your automated sales system. Would you like me to proceed with creating your AI sales agents?";
+            setConversationState(prev => ({ ...prev, askedAboutValue: true, readyToComplete: true }));
+        } else if (message.toLowerCase().includes('yes') || message.toLowerCase().includes('proceed') || 
+                  message.toLowerCase().includes('sure') || message.toLowerCase().includes('ok')) {
+            response = "Excellent! I'm setting up your automated sales system now. Your AI agents will start working immediately. Let's go to your dashboard to monitor the progress!";
+            setConversationState(prev => ({ ...prev, readyToComplete: true }));
+            
+            // Complete the onboarding after a short delay
+            setTimeout(() => {
+                saveBusinessInfo();
+            }, 3000);
+        } else {
+            response = "Thank you for that information. Is there anything else you'd like to share about your business before we proceed?";
+        }
+
+        const agentMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            sender: "Interface Agent",
+            content: response,
+            timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, agentMessage]);
+        await speakMessage(response);
     };
 
     const processBusinessInfo = async (message: string) => {
@@ -361,20 +471,22 @@ export default function OnboardingPage() {
             localStorage.setItem("workflowInitiated", "true");
             localStorage.setItem("onboardingCompletedAt", new Date().toISOString());
 
-            // Trigger automated workflow in background (don't wait for completion)
-            fetch("http://localhost:8000/api/onboarding/complete", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(businessInfo),
-            }).then(response => response.json())
-                .then(result => {
-                    console.log("Background workflow initiated:", result);
-                })
-                .catch(error => {
-                    console.error("Background workflow error:", error);
-                });
+            // Only try to trigger automated workflow if backend is connected
+            if (backendConnected) {
+                fetch("http://localhost:8000/api/onboarding/complete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(businessInfo),
+                }).then(response => response.json())
+                    .then(result => {
+                        console.log("Background workflow initiated:", result);
+                    })
+                    .catch(error => {
+                        console.error("Background workflow error:", error);
+                    });
+            }
 
             // Immediately redirect to dashboard (don't wait for backend)
             setTimeout(() => {
@@ -394,6 +506,22 @@ export default function OnboardingPage() {
             speechSynthesis.cancel();
             setIsAgentSpeaking(false);
         }
+    };
+
+    const retryConnection = async () => {
+        setIsLoading(true);
+        await checkBackendConnection();
+        
+        if (backendConnected) {
+            setShowDemoMode(false);
+            // Restart the conversation if we just reconnected
+            if (messages.length <= 1) {
+                setMessages([]);
+                startConversation();
+            }
+        }
+        
+        setIsLoading(false);
     };
 
     return (
@@ -422,6 +550,29 @@ export default function OnboardingPage() {
                 </div>
             </nav>
 
+            {/* Connection Status Banner */}
+            {!backendConnected && (
+                <div className="bg-yellow-100 border-b border-yellow-300 px-6 py-3">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <WifiOff className="h-5 w-5 text-yellow-700" />
+                            <span className="text-yellow-800 font-medium">Demo Mode - Elevenlabs not connected</span>
+                            <span className="text-yellow-700 text-sm">
+                                {elevenLabsActive ? "ElevenLabs is active" : "Using browser text-to-speech"}
+                            </span>
+                        </div>
+                        {/* <button 
+                            onClick={retryConnection}
+                            disabled={isLoading}
+                            className="flex items-center space-x-1 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50"
+                        >
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Server className="h-4 w-4" />}
+                            <span>Retry Connection</span>
+                        </button> */}
+                    </div>
+                </div>
+            )}
+
             {/* Main Content */}
             <main className="max-w-7xl mx-auto px-6 py-8">
                 <div className="grid lg:grid-cols-2 gap-8">
@@ -433,12 +584,20 @@ export default function OnboardingPage() {
                                 Voice Onboarding
                             </h1>
                             <p className="text-lg text-gray-600 mb-4">
-                                Have a natural conversation with our AI Interface Agent powered by ElevenLabs voice technology.
+                                Have a natural conversation with our AI Interface Agent {backendConnected ? "powered by ElevenLabs voice technology" : "in demo mode"}.
                             </p>
                             <div className="flex items-center justify-center space-x-2 mb-4">
-                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                                <span className="text-sm text-green-600 font-medium">ElevenLabs Voice AI Active</span>
+                                <div className={`w-3 h-3 rounded-full ${elevenLabsActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                                <span className={`text-sm font-medium ${elevenLabsActive ? 'text-green-600' : 'text-gray-500'}`}>
+                                    {elevenLabsActive ? "ElevenLabs Voice AI Active" : "Browser TTS Active"}
+                                </span>
                             </div>
+                            {showDemoMode && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 inline-flex items-center space-x-2">
+                                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                                    <span className="text-blue-700 text-sm">Running in demo mode with simulated responses</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Voice Visualization */}
@@ -576,6 +735,12 @@ export default function OnboardingPage() {
                             <p className="text-gray-600">
                                 Real-time display of your conversation with the Interface Agent
                             </p>
+                            {showDemoMode && (
+                                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2 inline-flex items-center space-x-1">
+                                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                                    <span className="text-amber-700 text-sm">Demo conversation flow</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Chat Messages */}
