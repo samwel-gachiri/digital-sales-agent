@@ -6,7 +6,7 @@ import {
     Volume2, VolumeX, Activity, Sparkles, Zap, TrendingUp, Award,
     Mic, MicOff, Play, Pause
 } from "lucide-react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface Message {
@@ -27,9 +27,8 @@ interface ConversationStatus {
 }
 
 export default function ConversationsPage() {
-    const searchParams = useSearchParams();
     const router = useRouter();
-    const prospectId = searchParams.get("prospect_id");
+    const prospectId = "demo_prospect_123"; // Default value instead of search param
 
     const [loading, setLoading] = useState(false);
     const [conversationStarted, setConversationStarted] = useState(false);
@@ -49,7 +48,7 @@ export default function ConversationsPage() {
     const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
     const [dealClosed, setDealClosed] = useState(false);
     const [web3RewardsTriggered, setWeb3RewardsTriggered] = useState(false);
-    const [demoMode, setDemoMode] = useState(false);
+    const [demoMode, setDemoMode] = useState(true); // Always use demo mode
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
@@ -62,15 +61,10 @@ export default function ConversationsPage() {
     }, [messages]);
 
     useEffect(() => {
-        if (prospectId && !conversationStarted) {
-            checkSystemStatus();
-            startConversation();
-        } else if (!prospectId && !conversationStarted) {
-            // No prospect ID provided, show demo mode
-            setDemoMode(true);
+        if (!conversationStarted) {
             startDemoConversation();
         }
-    }, [prospectId]);
+    }, []);
 
     useEffect(() => {
         // Clean up demo timeouts on unmount
@@ -80,30 +74,6 @@ export default function ConversationsPage() {
             }
         };
     }, []);
-
-    const checkSystemStatus = async () => {
-        try {
-            const response = await fetch("http://localhost:8000/api/health");
-            const health = await response.json();
-
-            setConversationStatus(prev => ({
-                ...prev,
-                coral_connected: health.agent_status === "connected",
-                agent_status: health.agent_status === "connected" ? "active" : "disconnected",
-                elevenlabs_enabled: health.elevenlabs_status === "configured"
-            }));
-        } catch (error) {
-            console.error("Error checking system status:", error);
-            // Enable demo mode on connection error
-            setDemoMode(true);
-            setConversationStatus(prev => ({
-                ...prev,
-                coral_connected: false,
-                agent_status: "disconnected",
-                elevenlabs_enabled: false
-            }));
-        }
-    };
 
     const startDemoConversation = () => {
         setLoading(true);
@@ -154,84 +124,6 @@ export default function ConversationsPage() {
                 }
             }, 1000 * (index + 1));
         });
-    };
-
-    const startConversation = async () => {
-        if (demoMode) {
-            startDemoConversation();
-            return;
-        }
-
-        setLoading(true);
-        setConversationStatus(prev => ({ ...prev, agent_status: "connecting" }));
-
-        try {
-            // First validate Coral Protocol connection
-            await checkSystemStatus();
-
-            const response = await fetch("http://localhost:8000/api/conversations/start", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    prospect_id: prospectId,
-                    user_message: "Hi, I'm interested in learning more about your services."
-                }),
-            });
-
-            const result = await response.json();
-
-            if (result.status === "conversation_started" || result.status === "success") {
-                setConversationStarted(true);
-                setConversationId(result.conversation_id || `conv_${Date.now()}`);
-                setConversationStatus(prev => ({
-                    ...prev,
-                    agent_status: "active",
-                    coral_connected: true
-                }));
-
-                const initialResponse = result.initial_response ||
-                    "Hello! Thank you for your interest. I'm an AI sales agent powered by advanced voice technology and multi-agent coordination. I'd love to help you understand how our solutions can benefit your business. What specific challenges are you looking to solve?";
-
-                // Add initial messages
-                const initialMessages = [
-                    {
-                        id: "1",
-                        sender: "prospect" as const,
-                        content: "Hi, I'm interested in learning more about your services.",
-                        timestamp: new Date().toISOString()
-                    },
-                    {
-                        id: "2",
-                        sender: "agent" as const,
-                        content: initialResponse,
-                        timestamp: new Date().toISOString(),
-                        audioUrl: result.audio_url
-                    }
-                ];
-
-                setMessages(initialMessages);
-
-                // Play ElevenLabs audio if available
-                if (result.audio_url && !isMuted) {
-                    await playAudioResponse(result.audio_url, initialResponse);
-                }
-
-                // Update engagement score
-                setConversationStatus(prev => ({
-                    ...prev,
-                    engagement_score: 25
-                }));
-            } else {
-                throw new Error(result.message || "Failed to start conversation");
-            }
-        } catch (error) {
-            console.error("Error starting conversation:", error);
-            // Fall back to demo mode
-            setDemoMode(true);
-            startDemoConversation();
-        }
     };
 
     const playAudioResponse = async (audioUrl: string, text: string) => {
@@ -286,66 +178,44 @@ export default function ConversationsPage() {
     };
 
     const startListening = () => {
-        if (demoMode) {
-            // Demo mode voice input simulation
-            setIsListening(true);
-            setCurrentTranscript("");
-            
-            // Simulate speech recognition
-            const demoPhrases = [
-                "I'm looking for a sales automation solution",
-                "We need to improve our lead generation",
-                "How does your pricing work?",
-                "Can you integrate with our CRM?",
-                "Tell me about your features"
-            ];
-            
-            let progress = "";
-            const randomPhrase = demoPhrases[Math.floor(Math.random() * demoPhrases.length)];
-            
-            const typeDemoText = () => {
-                if (progress.length < randomPhrase.length) {
-                    progress = randomPhrase.substring(0, progress.length + 1);
-                    setCurrentTranscript(progress);
-                    demoTimeoutRef.current = setTimeout(typeDemoText, 100);
-                } else {
-                    demoTimeoutRef.current = setTimeout(() => {
-                        setIsListening(false);
-                        setCurrentMessage(randomPhrase);
-                        handleUserMessage(randomPhrase);
-                    }, 1000);
-                }
-            };
-            
-            typeDemoText();
-            return;
-        }
+        // Demo mode voice input simulation
+        setIsListening(true);
+        setCurrentTranscript("");
         
-        if (recognitionRef.current && !isListening) {
-            setIsListening(true);
-            setCurrentTranscript("");
-            recognitionRef.current.start();
-        }
+        // Simulate speech recognition
+        const demoPhrases = [
+            "I'm looking for a sales automation solution",
+            "We need to improve our lead generation",
+            "How does your pricing work?",
+            "Can you integrate with our CRM?",
+            "Tell me about your features"
+        ];
+        
+        let progress = "";
+        const randomPhrase = demoPhrases[Math.floor(Math.random() * demoPhrases.length)];
+        
+        const typeDemoText = () => {
+            if (progress.length < randomPhrase.length) {
+                progress = randomPhrase.substring(0, progress.length + 1);
+                setCurrentTranscript(progress);
+                demoTimeoutRef.current = setTimeout(typeDemoText, 100);
+            } else {
+                demoTimeoutRef.current = setTimeout(() => {
+                    setIsListening(false);
+                    setCurrentMessage(randomPhrase);
+                    handleUserMessage(randomPhrase);
+                }, 1000);
+            }
+        };
+        
+        typeDemoText();
     };
 
     const stopListening = () => {
-        if (demoMode) {
-            setIsListening(false);
-            if (currentTranscript.trim()) {
-                setCurrentMessage(currentTranscript.trim());
-                handleUserMessage(currentTranscript.trim());
-            }
-            return;
-        }
-        
-        if (recognitionRef.current && isListening) {
-            recognitionRef.current.stop();
-            setIsListening(false);
-
-            if (currentTranscript.trim()) {
-                setCurrentMessage(currentTranscript.trim());
-                handleUserMessage(currentTranscript.trim());
-            }
+        setIsListening(false);
+        if (currentTranscript.trim()) {
+            setCurrentMessage(currentTranscript.trim());
+            handleUserMessage(currentTranscript.trim());
         }
     };
 
@@ -370,141 +240,44 @@ export default function ConversationsPage() {
             engagement_score: Math.min(prev.engagement_score + 15, 100)
         }));
 
-        if (demoMode) {
-            // Demo mode response simulation
-            demoTimeoutRef.current = setTimeout(() => {
-                const demoResponses = [
-                    "Our sales automation platform uses AI to qualify leads 5x faster than traditional methods. We've helped companies increase conversion rates by up to 40%.",
-                    "That's a great question! Our pricing is based on the number of agents and features you need. We offer flexible plans starting at $99/month.",
-                    "Yes, we integrate with all major CRMs including Salesforce, HubSpot, and Zoho. The setup process typically takes less than 30 minutes.",
-                    "Our platform includes automated prospect research, personalized email campaigns, multi-channel outreach, and real-time analytics dashboard.",
-                    "Based on your needs, I'd recommend our Professional plan which includes 5 AI agents, CRM integration, and advanced analytics."
-                ];
-                
-                const randomResponse = demoResponses[Math.floor(Math.random() * demoResponses.length)];
-                
-                const agentMessage: Message = {
-                    id: (Date.now() + 1).toString(),
-                    sender: "agent",
-                    content: randomResponse,
-                    timestamp: new Date().toISOString()
-                };
-
-                setMessages(prev => [...prev, agentMessage]);
-                
-                // Randomly trigger deal closure in demo mode
-                if (Math.random() > 0.7 && !dealClosed) {
-                    setDealClosed(true);
-                    setConversationStatus(prev => ({
-                        ...prev,
-                        deal_potential: "high",
-                        engagement_score: 100
-                    }));
-
-                    // Trigger Web3 rewards
-                    setTimeout(() => {
-                        triggerWeb3Rewards();
-                    }, 2000);
-                }
-                
-                setLoading(false);
-            }, 1500);
-            return;
-        }
-
-        try {
-            // Call backend for AI response with ElevenLabs TTS
-            const response = await fetch(`http://localhost:8000/api/conversations/${conversationId}/message`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    message: message
-                }),
-            });
-
-            const result = await response.json();
-
-            if (result.status === "success") {
-                const agentMessage: Message = {
-                    id: (Date.now() + 1).toString(),
-                    sender: "agent",
-                    content: result.agent_response,
-                    timestamp: new Date().toISOString(),
-                    audioUrl: result.audio_url
-                };
-
-                setMessages(prev => [...prev, agentMessage]);
-
-                // Play ElevenLabs audio response
-                if (result.audio_url && !isMuted) {
-                    await playAudioResponse(result.audio_url, result.agent_response);
-                }
-
-                // Check for deal closure indicators
-                const lowerResponse = result.agent_response.toLowerCase();
-                if (lowerResponse.includes('deal') && (lowerResponse.includes('closed') || lowerResponse.includes('agreement') || lowerResponse.includes('contract'))) {
-                    setDealClosed(true);
-                    setConversationStatus(prev => ({
-                        ...prev,
-                        deal_potential: "high",
-                        engagement_score: 100
-                    }));
-
-                    // Trigger Web3 rewards
-                    setTimeout(() => {
-                        triggerWeb3Rewards();
-                    }, 2000);
-                }
-
-                // Update deal potential based on conversation
-                if (lowerResponse.includes('interested') || lowerResponse.includes('perfect') || lowerResponse.includes('exactly')) {
-                    setConversationStatus(prev => ({
-                        ...prev,
-                        deal_potential: "high"
-                    }));
-                } else if (lowerResponse.includes('maybe') || lowerResponse.includes('consider')) {
-                    setConversationStatus(prev => ({
-                        ...prev,
-                        deal_potential: "medium"
-                    }));
-                }
-            } else {
-                // Fallback response with system status awareness
-                const fallbackContent = conversationStatus.coral_connected
-                    ? "I appreciate your interest. Let me connect you with our team to discuss how we can help your business grow with our AI-powered sales automation platform."
-                    : "I'm experiencing some connectivity issues with our advanced multi-agent system, but I can still help you. Our platform offers automated prospect research, personalized email campaigns, and blockchain-based rewards. What specific challenges can we help you solve?";
-
-                const fallbackMessage: Message = {
-                    id: (Date.now() + 1).toString(),
-                    sender: "agent",
-                    content: fallbackContent,
-                    timestamp: new Date().toISOString()
-                };
-                setMessages(prev => [...prev, fallbackMessage]);
-
-                if (!isMuted) {
-                    await playAudioResponse("", fallbackContent);
-                }
-            }
-        } catch (error) {
-            console.error("Error sending message:", error);
-            // Fallback response
-            const fallbackMessage: Message = {
+        // Demo mode response simulation
+        demoTimeoutRef.current = setTimeout(() => {
+            const demoResponses = [
+                "Our sales automation platform uses AI to qualify leads 5x faster than traditional methods. We've helped companies increase conversion rates by up to 40%.",
+                "That's a great question! Our pricing is based on the number of agents and features you need. We offer flexible plans starting at $99/month.",
+                "Yes, we integrate with all major CRMs including Salesforce, HubSpot, and Zoho. The setup process typically takes less than 30 minutes.",
+                "Our platform includes automated prospect research, personalized email campaigns, multi-channel outreach, and real-time analytics dashboard.",
+                "Based on your needs, I'd recommend our Professional plan which includes 5 AI agents, CRM integration, and advanced analytics."
+            ];
+            
+            const randomResponse = demoResponses[Math.floor(Math.random() * demoResponses.length)];
+            
+            const agentMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 sender: "agent",
-                content: "I'm having trouble processing your message right now. Our system uses advanced Coral Protocol coordination between multiple AI agents. Could you please try again?",
+                content: randomResponse,
                 timestamp: new Date().toISOString()
             };
-            setMessages(prev => [...prev, fallbackMessage]);
 
-            if (!isMuted) {
-                await playAudioResponse("", fallbackMessage.content);
+            setMessages(prev => [...prev, agentMessage]);
+            
+            // Randomly trigger deal closure in demo mode
+            if (Math.random() > 0.7 && !dealClosed) {
+                setDealClosed(true);
+                setConversationStatus(prev => ({
+                    ...prev,
+                    deal_potential: "high",
+                    engagement_score: 100
+                }));
+
+                // Trigger Web3 rewards
+                setTimeout(() => {
+                    triggerWeb3Rewards();
+                }, 2000);
             }
-        } finally {
+            
             setLoading(false);
-        }
+        }, 1500);
     };
 
     const sendMessage = async (e: React.FormEvent) => {
@@ -513,62 +286,19 @@ export default function ConversationsPage() {
     };
 
     const triggerWeb3Rewards = async () => {
-        if (demoMode) {
-            setWeb3RewardsTriggered(true);
+        setWeb3RewardsTriggered(true);
 
-            // Add system message about Web3 rewards
-            const rewardMessage: Message = {
-                id: (Date.now() + 2).toString(),
-                sender: "agent",
-                content: "🎉 Congratulations! This deal closure has triggered our Web3 reward system. Commission tokens and achievement NFTs are being processed on the blockchain. You can view your rewards in the Web3 dashboard.",
-                timestamp: new Date().toISOString()
-            };
+        // Add system message about Web3 rewards
+        const rewardMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            sender: "agent",
+            content: "🎉 Congratulations! This deal closure has triggered our Web3 reward system. Commission tokens and achievement NFTs are being processed on the blockchain. You can view your rewards in the Web3 dashboard.",
+            timestamp: new Date().toISOString()
+        };
 
-            setTimeout(() => {
-                setMessages(prev => [...prev, rewardMessage]);
-            }, 1000);
-            return;
-        }
-
-        try {
-            const response = await fetch('http://localhost:8000/api/crossmint/process-rewards', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    deal_id: conversationId,
-                    deal_value: 5000,
-                    sales_agent_id: 'sales_agent_001',
-                    achievement_type: 'deal_closer',
-                    performance_data: {
-                        deals_closed: 1,
-                        revenue: 5000,
-                        conversion_rate: 100
-                    }
-                }),
-            });
-
-            const result = await response.json();
-
-            if (result.status === 'success' || result.status === 'disabled') {
-                setWeb3RewardsTriggered(true);
-
-                // Add system message about Web3 rewards
-                const rewardMessage: Message = {
-                    id: (Date.now() + 2).toString(),
-                    sender: "agent",
-                    content: "🎉 Congratulations! This deal closure has triggered our Web3 reward system. Commission tokens and achievement NFTs are being processed on the blockchain. You can view your rewards in the Web3 dashboard.",
-                    timestamp: new Date().toISOString()
-                };
-
-                setTimeout(() => {
-                    setMessages(prev => [...prev, rewardMessage]);
-                }, 1000);
-            }
-        } catch (error) {
-            console.error('Error triggering Web3 rewards:', error);
-        }
+        setTimeout(() => {
+            setMessages(prev => [...prev, rewardMessage]);
+        }, 1000);
     };
 
     const formatTime = (timestamp: string) => {
@@ -611,11 +341,9 @@ export default function ConversationsPage() {
                         <span>Back to Dashboard</span>
                     </Link>
                     <div className="flex items-center space-x-4">
-                        {demoMode && (
-                            <div className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                                Demo Mode
-                            </div>
-                        )}
+                        <div className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                            Demo Mode
+                        </div>
                         <button
                             onClick={toggleMute}
                             className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-all duration-200"
@@ -657,7 +385,7 @@ export default function ConversationsPage() {
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">Coral Protocol</span>
                                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${conversationStatus.coral_connected ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>
-                                        <div className={`w-2 h-2 rounded-full ${conversationStatus.coral_connected ? 'bg-green-500' : 'bg-red-500'} ${demoMode ? 'animate-pulse' : ''}`}></div>
+                                        <div className={`w-2 h-2 rounded-full ${conversationStatus.coral_connected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
                                         <span>{conversationStatus.coral_connected ? 'Connected' : 'Disconnected'}</span>
                                     </div>
                                 </div>
@@ -665,7 +393,7 @@ export default function ConversationsPage() {
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">Agent Status</span>
                                     <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(conversationStatus.agent_status)}`}>
-                                        <div className={`w-2 h-2 rounded-full ${conversationStatus.agent_status === 'active' ? 'bg-green-500' : conversationStatus.agent_status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'} ${demoMode ? 'animate-pulse' : ''}`}></div>
+                                        <div className={`w-2 h-2 rounded-full ${conversationStatus.agent_status === 'active' ? 'bg-green-500' : conversationStatus.agent_status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'} animate-pulse`}></div>
                                         <span className="capitalize">{conversationStatus.agent_status}</span>
                                     </div>
                                 </div>
@@ -748,17 +476,10 @@ export default function ConversationsPage() {
                             <p className="text-lg text-gray-600 mb-4">
                                 Multi-agent coordination with voice AI and blockchain rewards
                             </p>
-                            {demoMode ? (
-                                <div className="flex items-center justify-center space-x-2 mb-4">
-                                    <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-                                    <span className="text-sm text-yellow-600 font-medium">Demo Mode</span>
-                                </div>
-                            ) : prospectId && (
-                                <div className="flex items-center justify-center space-x-2 mb-4">
-                                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                                    <span className="text-sm text-blue-600 font-medium">Prospect ID: {prospectId}</span>
-                                </div>
-                            )}
+                            <div className="flex items-center justify-center space-x-2 mb-4">
+                                <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                                <span className="text-sm text-yellow-600 font-medium">Demo Mode - Interactive Preview</span>
+                            </div>
                         </div>
 
                         {/* Chat Container */}
@@ -778,9 +499,7 @@ export default function ConversationsPage() {
                                                 </div>
                                                 <p className="text-lg text-gray-700 mb-2">Initializing AI Sales Agent...</p>
                                                 <p className="text-sm text-gray-500">Connecting to Coral Protocol and ElevenLabs</p>
-                                                {demoMode && (
-                                                    <p className="text-sm text-yellow-600 mt-2">Running in demo mode with simulated responses</p>
-                                                )}
+                                                <p className="text-sm text-yellow-600 mt-2">Running in demo mode with simulated responses</p>
                                             </>
                                         ) : (
                                             <>
@@ -794,7 +513,7 @@ export default function ConversationsPage() {
                                                     Our advanced AI sales agent uses multi-agent coordination, voice technology, and blockchain rewards to provide the best sales experience.
                                                 </p>
                                                 <button
-                                                    onClick={startConversation}
+                                                    onClick={startDemoConversation}
                                                     className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-4 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
                                                 >
                                                     Start Sales Conversation
@@ -930,11 +649,9 @@ export default function ConversationsPage() {
                                         <p className="text-xs text-green-700 mt-1">
                                             Multi-agent coordination • Voice AI • Blockchain rewards • Deal closing automation
                                         </p>
-                                        {demoMode && (
-                                            <p className="text-xs text-yellow-700 mt-1">
-                                                Demo mode with simulated responses
-                                            </p>
-                                        )}
+                                        <p className="text-xs text-yellow-700 mt-1">
+                                            Demo mode with simulated responses
+                                        </p>
                                     </div>
                                 </div>
                             </div>
