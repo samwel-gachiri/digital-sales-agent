@@ -54,6 +54,7 @@ export default function DashboardPage() {
         emails: 0,
         conversations: 0
     });
+    const [showRedirectNotice, setShowRedirectNotice] = useState(false);
 
     useEffect(() => {
         // Check if user has completed onboarding
@@ -61,9 +62,13 @@ export default function DashboardPage() {
         const initiated = localStorage.getItem("workflowInitiated");
 
         if (!stored) {
-            // Redirect to onboarding if no business info
-            router.push("/onboarding");
-            return;
+            // Show notification before redirecting to onboarding
+            setShowRedirectNotice(true);
+            // Wait a moment to show the notification, then redirect
+            const timer = setTimeout(() => {
+                router.push("/onboarding");
+            }, 2000);
+            return () => clearTimeout(timer);
         }
 
         setBusinessInfo(JSON.parse(stored));
@@ -199,17 +204,33 @@ export default function DashboardPage() {
         }
     };
 
-    if (loading) {
+    if (loading || showRedirectNotice) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
                 <div className="text-center">
-                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600 mb-4" />
-                    <p className="text-lg text-gray-600">Loading your sales dashboard...</p>
+                    {showRedirectNotice ? (
+                        <>
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Bot className="h-8 w-8 text-blue-600" />
+                            </div>
+                            <h2 className="text-xl font-semibold text-gray-800 mb-2">Taking you to onboarding</h2>
+                            <p className="text-gray-600">Please complete your business setup to get started</p>
+                            <div className="mt-6">
+                                <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600 mb-4" />
+                            <p className="text-lg text-gray-600">Loading your sales dashboard...</p>
+                        </>
+                    )}
                 </div>
             </div>
         );
     }
 
+    // ... rest of the component remains the same
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
             {/* Navigation */}
