@@ -43,6 +43,8 @@ export default function OnboardingPage() {
     const [backendConnected, setBackendConnected] = useState(true);
     const [elevenLabsActive, setElevenLabsActive] = useState(true);
     const [showDemoMode, setShowDemoMode] = useState(false);
+    const [isCompleting, setIsCompleting] = useState(false);
+    const [interactionCount, setInteractionCount] = useState(0);
 
     const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,6 +89,14 @@ export default function OnboardingPage() {
             }
         };
     }, [messages]);
+
+    useEffect(() => {
+        // Prevent infinite loops
+        if (interactionCount > 10) {
+            console.warn("Conversation loop detected, forcing completion");
+            saveBusinessInfo();
+        }
+    }, [interactionCount]);
 
     const checkBackendConnection = async () => {
         try {
@@ -295,29 +305,14 @@ export default function OnboardingPage() {
         setMessages(prev => [...prev, userMessage]);
         setCurrentTranscript("");
         setIsLoading(true);
+        setInteractionCount(prev => prev + 1);
 
-        // Extract business info and update conversation state
+        // Extract business info
         await processBusinessInfo(message);
-
-        // Update conversation state based on what we've learned
-        const lowerMessage = message.toLowerCase();
-        const newState = { ...conversationState };
-
-        if (lowerMessage.includes('sell') || lowerMessage.includes('business') || lowerMessage.includes('clothes') || lowerMessage.includes('product')) {
-            newState.askedAboutBusiness = true;
-        }
-        if (lowerMessage.includes('b2b') || lowerMessage.includes('companies') || lowerMessage.includes('target') || lowerMessage.includes('market')) {
-            newState.askedAboutTarget = true;
-        }
-        if (lowerMessage.includes('unique') || lowerMessage.includes('value') || lowerMessage.includes('quality')) {
-            newState.askedAboutValue = true;
-        }
-
-        setConversationState(newState);
 
         // If backend is not connected, use demo responses
         if (!backendConnected || showDemoMode) {
-            await handleDemoResponse(message, newState);
+            await handleDemoResponse(message);
             setIsLoading(false);
             return;
         }
@@ -332,7 +327,7 @@ export default function OnboardingPage() {
                 body: JSON.stringify({
                     message: message,
                     history: messages.map(m => ({ sender: m.sender, content: m.content })),
-                    conversation_state: newState
+                    conversation_state: conversationState
                 }),
             });
 
@@ -352,12 +347,16 @@ export default function OnboardingPage() {
                 };
 
                 setMessages(prev => [...prev, agentMessage]);
+                
+                // Update conversation state from backend if provided
+                if (result.conversation_state) {
+                    setConversationState(result.conversation_state);
+                }
 
-                // Play the ElevenLabs audio response
+                // Play the audio response
                 if (result.audio_url && !isMuted) {
                     await playAudioResponse(result.audio_url, result.agent_response);
                 } else if (!isMuted) {
-                    // Fallback if no audio URL
                     await playAudioResponse("", result.agent_response);
                 }
 
@@ -365,7 +364,7 @@ export default function OnboardingPage() {
                 if (result.conversation_complete) {
                     setTimeout(() => {
                         saveBusinessInfo();
-                    }, 3000);
+                    }, 2000);
                 }
             }
         } catch (error) {
@@ -374,37 +373,38 @@ export default function OnboardingPage() {
             setElevenLabsActive(false);
             
             // Fallback to demo mode
-            await handleDemoResponse(message, newState);
+            await handleDemoResponse(message);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleDemoResponse = async (message: string, currentState: any) => {
-        // Simple demo conversation flow
+    const handleDemoResponse = async (message: string) => {
+        const lowerMessage = message.toLowerCase();
         let response = "";
-        
-        if (!currentState.askedAboutBusiness) {
+        let newState = {...conversationState};
+        let shouldComplete = false;
+
+        if (!conversationState.askedAboutBusiness) {
             response = "Thank you for sharing that! Could you tell me more about your target market? Who are your ideal customers?";
-            setConversationState(prev => ({ ...prev, askedAboutBusiness: true }));
-        } else if (!currentState.askedAboutTarget) {
+            newState.askedAboutBusiness = true;
+        } else if (!conversationState.askedAboutTarget) {
             response = "Great! Now, what makes your business unique? What's your value proposition or competitive advantage?";
-            setConversationState(prev => ({ ...prev, askedAboutTarget: true }));
-        } else if (!currentState.askedAboutValue) {
+            newState.askedAboutTarget = true;
+        } else if (!conversationState.askedAboutValue) {
             response = "Perfect! I now have enough information to set up your automated sales system. Would you like me to proceed with creating your AI sales agents?";
-            setConversationState(prev => ({ ...prev, askedAboutValue: true, readyToComplete: true }));
-        } else if (message.toLowerCase().includes('yes') || message.toLowerCase().includes('proceed') || 
-                  message.toLowerCase().includes('sure') || message.toLowerCase().includes('ok')) {
+            newState.askedAboutValue = true;
+            newState.readyToComplete = true;
+        } else if (newState.readyToComplete && 
+                  (lowerMessage.includes('yes') || lowerMessage.includes('proceed') || 
+                   lowerMessage.includes('sure') || lowerMessage.includes('ok'))) {
             response = "Excellent! I'm setting up your automated sales system now. Your AI agents will start working immediately. Let's go to your dashboard to monitor the progress!";
-            setConversationState(prev => ({ ...prev, readyToComplete: true }));
-            
-            // Complete the onboarding after a short delay
-            setTimeout(() => {
-                saveBusinessInfo();
-            }, 3000);
+            shouldComplete = true;
         } else {
             response = "Thank you for that information. Is there anything else you'd like to share about your business before we proceed?";
         }
+
+        setConversationState(newState);
 
         const agentMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -415,6 +415,12 @@ export default function OnboardingPage() {
 
         setMessages(prev => [...prev, agentMessage]);
         await speakMessage(response);
+        
+        if (shouldComplete) {
+            setTimeout(() => {
+                saveBusinessInfo();
+            }, 2000);
+        }
     };
 
     const processBusinessInfo = async (message: string) => {
@@ -453,6 +459,9 @@ export default function OnboardingPage() {
     };
 
     const saveBusinessInfo = async () => {
+        if (isCompleting) return;
+        
+        setIsCompleting(true);
         try {
             setIsLoading(true);
 
@@ -495,6 +504,7 @@ export default function OnboardingPage() {
 
         } catch (error) {
             console.error("Error saving business info:", error);
+            setIsCompleting(false);
         } finally {
             setIsLoading(false);
         }
@@ -556,19 +566,19 @@ export default function OnboardingPage() {
                     <div className="max-w-7xl mx-auto flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                             <WifiOff className="h-5 w-5 text-yellow-700" />
-                            <span className="text-yellow-800 font-medium">Demo Mode - Elevenlabs not connected</span>
+                            <span className="text-yellow-800 font-medium">Demo Mode - Backend not connected</span>
                             <span className="text-yellow-700 text-sm">
                                 {elevenLabsActive ? "ElevenLabs is active" : "Using browser text-to-speech"}
                             </span>
                         </div>
-                        {/* <button 
+                        <button 
                             onClick={retryConnection}
                             disabled={isLoading}
                             className="flex items-center space-x-1 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50"
                         >
                             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Server className="h-4 w-4" />}
                             <span>Retry Connection</span>
-                        </button> */}
+                        </button>
                     </div>
                 </div>
             )}
