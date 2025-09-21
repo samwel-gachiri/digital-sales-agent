@@ -130,7 +130,6 @@ Thumbs.db
 *.sqlite3
 
 # Coral Protocol specific
-coral-server/
 .coral/
 .kiro/
 
@@ -138,15 +137,14 @@ coral-server/
 demo_data/
 test_results/
 
-SalesUI\app\conversations\
-SalesUI\app\emails\
+SalesUI/app/conversations/
+SalesUI/app/emails/
 
 
-Coral-AciDevMCP-Agent
-Coral-OpenDeepResearch-Agent
-Coral-Pandas-Agent
-coral-server
-coraliser
+Coral-AciDevMCP-Agent/
+Coral-OpenDeepResearch-Agent/
+Coral-Pandas-Agent/
+coraliser/
 Coral-VoiceInterface-Agent/
 Multi-Agent-Demo/
 Prosus-Agentic-Voice-Restaurant-Webapp/

@@ -68,8 +68,8 @@ async def research_prospects(target_domain: str = None, industry: str = None, co
         "target_domain": target_domain,
         "industry": industry,
         "next_steps": [
-            "Use list_agents to find firecrawl_agent",
-            "Use create_thread with firecrawl_agent as participant", 
+            "Use list_agents to find firecrawlmcp_agent",
+            "Use create_thread with firecrawlmcp_agent as participant", 
             f"Use send_message to request web scraping for {target_domain or industry}",
             "Use wait_for_mentions to receive Firecrawl response",
             "Use process_firecrawl_response to update prospect data"
@@ -496,8 +496,8 @@ async def auto_research_prospects(business_info: dict, target_criteria: dict):
         "message": f"Prospect research initiated for {industry}",
         "prospect_id": prospect_id,
         "next_steps": [
-            "Use coral_list_agents to find firecrawl_agent",
-            "Use coral_create_thread with firecrawl_agent as participant", 
+            "Use coral_list_agents to find firecrawlmcp_agent",
+            "Use coral_create_thread with firecrawlmcp_agent as participant", 
             f"Use coral_send_message to request web scraping for {industry} companies",
             "Use coral_wait_for_mentions to receive Firecrawl response",
             "Use process_firecrawl_response to update prospect data"
@@ -751,32 +751,19 @@ async def create_agent(coral_tools, agent_tools):
     prompt = ChatPromptTemplate.from_messages([
         (
             "system",
-            f"""You are a Sales Agent that handles sales operations including prospect research, email generation, and sales conversations.
+            f"""Sales Agent: prospect research, email generation, sales conversations.
 
-            WORKFLOW:
-            1. Use coral_wait_for_mentions to listen for instructions from other agents
-            2. Parse received messages for JSON instructions or simple text
-            3. Execute appropriate sales tools based on instructions
-            4. Use coral_send_message to respond back with EXACT JSON results
-            5. Loop back to wait for more instructions
+            WORKFLOW: Listen → Execute tools → Send JSON results
             
-            INSTRUCTION PROCESSING:
-            - For JSON messages: Use parse_and_execute_instruction tool with the JSON content
-            - For simple text: Use acknowledge_message tool with sender ID and message content
-            - CRITICAL: Always send the EXACT JSON result from tools via coral_send_message
-            - Do NOT interpret, summarize, or modify the JSON responses from tools
-            - The content parameter in coral_send_message must be the raw JSON string from the tool
-            
-            AVAILABLE TOOLS:
-            Coral Protocol: {coral_tools_description}
-            Sales Tools: {agent_tools_description}
+            TOOLS: {len(coral_tools)} coral + {len(agent_tools)} sales tools
             
             COORDINATION:
-            - firecrawl_agent: Web scraping and contact extraction
-            - backend_coordinator: Receives instructions and sends results
-            - Always include sender in mentions when responding
-            - All emails sent to samgachiri2002@gmail.com for testing
-            - Include localhost:3000/conversations links in emails
+            - firecrawlmcp_agent: Web scraping
+            - backend_coordinator: Instructions/results
+            - Test emails → samgachiri2002@gmail.com
+            - Links → localhost:3000/conversations
+            
+            CRITICAL: Send EXACT JSON from tools via coral_send_message. No modifications.
             """
         ),
         ("user", "{input}"),
@@ -831,21 +818,11 @@ async def main():
     
     # Sales Agent tools
     agent_tools = [
-        Tool(
+        StructuredTool.from_function(
+            func=collect_business_info,
             name="collect_business_info",
-            func=None,
-            coroutine=collect_business_info,
             description="Collect and store business information from onboarding",
-            args_schema={
-                "properties": {
-                    "business_goal": {"type": "string", "description": "What is your business goal?"},
-                    "product_description": {"type": "string", "description": "What are you selling?"},
-                    "target_market": {"type": "string", "description": "Target market (optional)"},
-                    "value_proposition": {"type": "string", "description": "Value proposition (optional)"}
-                },
-                "required": ["business_goal", "product_description"],
-                "type": "object"
-            }
+            coroutine=collect_business_info
         ),
         Tool(
             name="research_prospects",
@@ -942,54 +919,23 @@ async def main():
                 "type": "object"
             }
         ),
-        Tool(
+        StructuredTool.from_function(
+            func=auto_research_prospects,
             name="auto_research_prospects",
-            func=None,
-            coroutine=auto_research_prospects,
             description="Automatically research prospects based on business information",
-            args_schema={
-                "properties": {
-                    "business_info": {"type": "object", "description": "Business information from onboarding"},
-                    "target_criteria": {"type": "object", "description": "Target criteria for prospect research"}
-                },
-                "required": ["business_info", "target_criteria"],
-                "type": "object"
-            }
+            coroutine=auto_research_prospects
         ),
-        Tool(
+        StructuredTool.from_function(
+            func=auto_generate_emails,
             name="auto_generate_emails",
-            func=None,
-            coroutine=auto_generate_emails,
             description="Automatically generate and send emails for prospects",
-            args_schema={
-                    "properties": {
-                        "business_info": {"type": "object", "description": "Business information for personalization"},
-                        "prospect_list": {
-                        "type": "array",
-                        "description": "List of prospects to email",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string", "description": "Prospect's full name"},
-                                "email": {"type": "string", "description": "Prospect's email address"}
-                            },
-                            "required": ["email"]
-                        }
-                    }
-                },
-                "required": ["business_info", "prospect_list"],
-                "type": "object"
-            }
+            coroutine=auto_generate_emails
         ),
-        Tool(
+        StructuredTool.from_function(
+            func=get_workflow_status,
             name="get_workflow_status",
-            func=None,
-            coroutine=get_workflow_status,
             description="Get current automated workflow status",
-            args_schema={
-                "properties": {},
-                "type": "object"
-            }
+            coroutine=get_workflow_status
         ),
         Tool(
             name="handle_interface_conversation",
