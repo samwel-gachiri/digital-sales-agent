@@ -2,7 +2,7 @@
 
 An intelligent sales automation system that leverages the Coral Protocol to orchestrate multiple specialized agents for complete sales workflows. Features ElevenLabs voice integration, automated prospect research, real-time agent coordination, and blockchain payment integration via Crossmint.
 
-![Digital Sales Agent Architecture](https://via.placeholder.com/800x400/3b82f6/ffffff?text=Digital+Sales+Agent+Architecture)
+<img width="384" height="256" alt="Digital-Sales-Agent-Infographic" src="https://github.com/user-attachments/assets/04903c4b-a73f-485c-bd81-ce91665a8126" />
 
 ## 🎯 Overview
 
